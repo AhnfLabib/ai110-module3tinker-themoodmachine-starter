@@ -9,9 +9,54 @@ This class starts with very simple logic:
   - Convert that score into a mood label
 """
 
-from typing import List, Dict, Tuple, Optional
+import re
+import string
+from typing import List, Optional, Tuple
 
 from dataset import POSITIVE_WORDS, NEGATIVE_WORDS
+
+# Strip from token ends after lowercasing; includes common Unicode quotes.
+# Omit "_" — it is in string.punctuation but placeholders use "__emoticon_pos__", etc.
+_EXTRA_STRIP_CHARS = "\u2018\u2019\u201c\u201d…"
+_STRIP_CHARS = string.punctuation.replace("_", "") + _EXTRA_STRIP_CHARS
+
+# Applied longest-first so ":-)" does not leave a stray "(" behind.
+_MOOD_SUBSTITUTIONS: Tuple[Tuple[str, str], ...] = tuple(
+    sorted(
+        (
+            (":-(", "__emoticon_neg__"),
+            (":-)", "__emoticon_pos__"),
+            (":(", "__emoticon_neg__"),
+            (":)", "__emoticon_pos__"),
+            ("\U0001f602", "__emoji_pos__"),  # 😂
+            ("\U0001f642", "__emoji_pos__"),  # 🙂
+            ("\U0001f60a", "__emoji_pos__"),  # 😊
+            ("\U0001f972", "__emoji_neg__"),  # 🥲
+            ("\U0001f480", "__emoji_neg__"),  # 💀
+            ("\U0001f622", "__emoji_neg__"),  # 😢
+        ),
+        key=lambda pair: len(pair[0]),
+        reverse=True,
+    )
+)
+
+
+def _apply_mood_substitutions(text: str) -> str:
+    out = text
+    for needle, repl in _MOOD_SUBSTITUTIONS:
+        out = out.replace(needle, f" {repl} ")
+    return out
+
+
+def _strip_outer_punctuation(token: str) -> str:
+    return token.strip(_STRIP_CHARS)
+
+
+def _collapse_repeated_chars(token: str) -> str:
+    # Collapse 3+ identical characters to 2 (e.g. "soooo" -> "soo"); letters only.
+    if not token.isalpha():
+        return token
+    return re.sub(r"(.)\1{2,}", r"\1\1", token)
 
 
 class MoodAnalyzer:
@@ -40,21 +85,22 @@ class MoodAnalyzer:
         """
         Convert raw text into a list of tokens the model can work with.
 
-        TODO: Improve this method.
-
-        Right now, it does the minimum:
-          - Strips leading and trailing whitespace
-          - Converts everything to lowercase
-          - Splits on spaces
-
-        Ideas to improve:
-          - Remove punctuation
-          - Handle simple emojis separately (":)", ":-(", "🥲", "😂")
-          - Normalize repeated characters ("soooo" -> "soo")
+        - Lowercase, trim, map ASCII faces and selected emoji to lexicon placeholders
+        - Split on whitespace
+        - Strip leading/trailing punctuation (ASCII + common Unicode quotes)
+        - Collapse 3+ repeated letters to 2 (e.g. "soooo" -> "soo")
+        - Drop empty tokens
         """
-        cleaned = text.strip().lower()
-        tokens = cleaned.split()
+        cleaned = _apply_mood_substitutions(text.strip().lower())
+        raw_tokens = cleaned.split()
+        tokens: List[str] = []
+        for tok in raw_tokens:
+            t = _strip_outer_punctuation(tok)
+            t = _collapse_repeated_chars(t)
+            if t:
+                tokens.append(t)
 
+        print(tokens)
         return tokens
 
     # ---------------------------------------------------------------------
@@ -75,15 +121,14 @@ class MoodAnalyzer:
           - Give some words higher weights than others (for example "hate" < "annoyed")
           - Treat emojis or slang (":)", "lol", "💀") as strong signals
         """
-        # TODO: Implement this method.
-        #   1. Call self.preprocess(text) to get tokens.
-        #   2. Loop over the tokens.
-        #   3. Increase the score for positive words, decrease for negative words.
-        #   4. Return the total score.
-        #
-        # Hint: if you implement negation, you may want to look at pairs of tokens,
-        # like ("not", "happy") or ("never", "fun").
-        pass
+        tokens = self.preprocess(text)
+        score = 0
+        for token in tokens:
+            if token in self.positive_words:
+                score += 1
+            if token in self.negative_words:
+                score -= 1
+        return score
 
     # ---------------------------------------------------------------------
     # Label prediction
@@ -93,24 +138,22 @@ class MoodAnalyzer:
         """
         Turn the numeric score for a piece of text into a mood label.
 
-        The default mapping is:
-          - score > 0  -> "positive"
-          - score < 0  -> "negative"
-          - score == 0 -> "neutral"
+        Mapping from ``score_text``:
+          - score >= 2  -> "positive"
+          - score <= -2 -> "negative"
+          - score == 0  -> "neutral"
+          - otherwise   -> "mixed" (e.g. scores 1 or -1)
 
-        TODO: You can adjust this mapping if it makes sense for your model.
-        For example:
-          - Use different thresholds (for example score >= 2 to be "positive")
-          - Add a "mixed" label for scores close to zero
-        Just remember that whatever labels you return should match the labels
-        you use in TRUE_LABELS in dataset.py if you care about accuracy.
+        Labels should align with ``TRUE_LABELS`` in dataset.py when measuring accuracy.
         """
-        # TODO: Implement this method.
-        #   1. Call self.score_text(text) to get the numeric score.
-        #   2. Return "positive" if the score is above 0.
-        #   3. Return "negative" if the score is below 0.
-        #   4. Return "neutral" otherwise.
-        pass
+        score = self.score_text(text)
+        if score >= 2:
+            return "positive"
+        if score <= -2:
+            return "negative"
+        if score == 0:
+            return "neutral"
+        return "mixed"
 
     # ---------------------------------------------------------------------
     # Explanations (optional but recommended)

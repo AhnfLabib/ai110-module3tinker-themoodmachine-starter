@@ -23,6 +23,9 @@ POSITIVE_WORDS = [
     "chill",
     "relaxed",
     "amazing",
+    # Placeholders produced by MoodAnalyzer.preprocess for faces / emoji
+    "__emoticon_pos__",
+    "__emoji_pos__",
 ]
 
 NEGATIVE_WORDS = [
@@ -36,6 +39,8 @@ NEGATIVE_WORDS = [
     "stressed",
     "hate",
     "boring",
+    "__emoticon_neg__",
+    "__emoji_neg__",
 ]
 
 # ---------------------------------------------------------------------
@@ -50,6 +55,11 @@ SAMPLE_POSTS = [
     "This is fine",
     "So excited for the weekend",
     "I am not happy about this",
+    "I am not feeling good about this",
+    "I am feeling really bad about this",
+    "I am feeling really good about this",
+    "I am feeling really bad about this",
+    "I am feeling really good about this",
 ]
 
 # Human labels for each post above.
@@ -65,6 +75,11 @@ TRUE_LABELS = [
     "neutral",   # "This is fine"
     "positive",  # "So excited for the weekend"
     "negative",  # "I am not happy about this"
+    "negative",  # "I am not feeling good about this"
+    "negative",  # "I am feeling really bad about this"
+    "positive",  # "I am feeling really good about this"
+    "negative",  # "I am feeling really bad about this"
+    "positive",  # "I am feeling really good about this"
 ]
 
 # TODO: Add 5-10 more posts and labels.
